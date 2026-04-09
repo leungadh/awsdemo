@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "Bash(chmod +x /Users/aleung/Projects/awsdemo/scripts/up.sh /Users/aleung/Projects/awsdemo/scripts/down.sh /Users/aleung/Projects/awsdemo/demo/*.sh)"
     ]
   }
 }

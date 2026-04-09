@@ -1,0 +1,20 @@
+# Copy this file to terraform.tfvars and fill in your values:
+#   cp terraform.tfvars.example terraform.tfvars
+
+# AWS region — ap-southeast-1 (Singapore) has vSRX PAYG NGFW AMI available
+aws_region = "ap-southeast-1"
+
+# Your public IP for SSH access (find it with: curl -s ifconfig.me)
+admin_cidr = "1.2.3.4/32"
+
+# Name of an existing AWS key pair (create one in EC2 > Key Pairs if needed)
+key_pair_name = "my-aws-key"
+
+# vSRX PAYG NGFW AMI — subscribe first at:
+# https://aws.amazon.com/marketplace/pp/prodview-z7jcugjx442hw
+# Then find the AMI ID for ap-southeast-1 in the subscription configuration page
+vsrx_ami = "ami-XXXXXXXXXXXXXXXXX"
+
+# Kali Linux AMI — leave empty to auto-discover, or provide explicitly:
+# https://aws.amazon.com/marketplace/pp/prodview-fznsw3f7mq7to
+# kali_ami = "ami-XXXXXXXXXXXXXXXXX"
