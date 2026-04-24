@@ -1,0 +1,13 @@
+# vSRX Demo Dashboard configuration
+# Copy to config.yaml (gitignored) and fill in your values.
+# Get vsrx_public_ip from: cd terraform && terraform output vsrx_mgmt_public_ip
+# If left blank, vsrx_public_ip is auto-read from terraform output at startup.
+
+vsrx_public_ip: ""
+ssh_key_path: "~/.ssh/awsdemo.pem"
+ssh_user: "ec2-user"
+aws_region: "ap-southeast-1"
+
+poll_interval_seconds: 15
+aws_poll_interval_seconds: 30
+port: 8080

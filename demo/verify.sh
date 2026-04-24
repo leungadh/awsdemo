@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run on vSRX (ssh root@<vsrx-mgmt-eip>) after each demo scenario
+# Run on vSRX (ssh ec2-user@<vsrx-mgmt-eip>) after each demo scenario
 # to verify that the vSRX is detecting and blocking attacks.
 #
 # Usage: paste these commands directly into the vSRX CLI

@@ -25,7 +25,7 @@ output "webserver_private_ip" {
 
 output "ssh_vsrx" {
   description = "SSH command to connect to vSRX management interface"
-  value       = "ssh -i ~/.ssh/<your-key>.pem root@${aws_eip.srx_mgmt.public_ip}"
+  value       = "ssh -i ~/.ssh/<your-key>.pem ec2-user@${aws_eip.srx_mgmt.public_ip}"
 }
 
 output "ssh_kali" {

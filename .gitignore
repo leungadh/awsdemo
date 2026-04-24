@@ -11,5 +11,8 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
+# Dashboard config (contains SSH key path — keep local)
+dashboard/config.yaml
+
 # macOS
 .DS_Store

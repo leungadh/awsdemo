@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vSRX Security Demo Dashboard</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0f172a;
+    color: #e2e8f0;
+    font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+    font-size: 13px;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Status bar ──────────────────────────────────────────────── */
+  #statusbar {
+    background: #0a1122;
+    border-bottom: 1px solid #1e293b;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 20px;
+    flex-shrink: 0;
+  }
+  #statusbar .title {
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    color: #38bdf8;
+  }
+  #statusbar .sep { color: #334155; }
+  #statusbar .info { color: #64748b; font-size: 12px; }
+  #statusbar .info span { color: #94a3b8; }
+  #ws-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #475569;
+    flex-shrink: 0;
+    transition: background 0.5s;
+  }
+  #ws-dot.ok     { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
+  #ws-dot.error  { background: #ef4444; }
+  #ws-dot.warn   { background: #f97316; }
+  #btn-reset {
+    margin-left: auto;
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #94a3b8;
+    padding: 5px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    transition: all 0.2s;
+  }
+  #btn-reset:hover  { background: #334155; color: #e2e8f0; }
+  #btn-reset:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ── Main layout ─────────────────────────────────────────────── */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Topology panel ──────────────────────────────────────────── */
+  #topology-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 20px;
+    overflow: hidden;
+  }
+  #topology {
+    width: 100%;
+    max-width: 900px;
+    height: auto;
+    cursor: default;
+  }
+  /* Marching ants on attack links */
+  @keyframes marchingAnts {
+    to { stroke-dashoffset: -20; }
+  }
+  .link-attack {
+    stroke-dasharray: 10 5;
+    animation: marchingAnts 0.4s linear infinite;
+  }
+  /* Node selection ring pulse */
+  @keyframes ringPulse {
+    0%, 100% { opacity: 0.9; }
+    50%       { opacity: 0.4; }
+  }
+  .ring-selected { animation: ringPulse 1.4s ease-in-out infinite; }
+
+  /* ── Sidebar ─────────────────────────────────────────────────── */
+  #sidebar {
+    width: 340px;
+    flex-shrink: 0;
+    border-left: 1px solid #1e293b;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .sb-section {
+    padding: 14px 16px;
+    border-bottom: 1px solid #1e293b;
+  }
+  .sb-title {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: #475569;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .sb-title::before {
+    content: "";
+    display: inline-block;
+    width: 3px; height: 12px;
+    background: #334155;
+    border-radius: 2px;
+  }
+
+  /* Counter rows */
+  .ctr-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid #1e293b22;
+  }
+  .ctr-row:last-child { border-bottom: none; }
+  .ctr-label {
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .ctr-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #334155;
+    flex-shrink: 0;
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  .ctr-dot.active {
+    background: #ef4444;
+    box-shadow: 0 0 5px #ef444499;
+  }
+  .ctr-dot.nonzero { background: #f97316; }
+  .ctr-value {
+    font-size: 15px;
+    color: #e2e8f0;
+    min-width: 44px;
+    text-align: right;
+  }
+  .ctr-delta {
+    font-size: 11px;
+    color: #ef4444;
+    min-width: 36px;
+    text-align: right;
+    transition: opacity 0.5s;
+  }
+
+  /* Session / policy mini-stats */
+  .mini-stats {
+    display: flex;
+    gap: 16px;
+    padding: 6px 0 2px;
+  }
+  .mini-stat { color: #64748b; }
+  .mini-stat span { color: #94a3b8; font-size: 15px; }
+
+  /* ── Detail panel (node click) ───────────────────────────────── */
+  #detail-section { display: none; }
+  .detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .detail-header h4 {
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    color: #e2e8f0;
+  }
+  #btn-close-detail {
+    background: none;
+    border: none;
+    color: #475569;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 2px;
+  }
+  #btn-close-detail:hover { color: #94a3b8; }
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid #1e293b44;
+    color: #64748b;
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-row .val { color: #e2e8f0; text-align: right; }
+  .s-healthy { color: #22c55e; }
+  .s-warning  { color: #f97316; }
+  .s-attack   { color: #ef4444; font-weight: bold; }
+  .s-stopped  { color: #6b7280; }
+  .s-unknown  { color: #475569; }
+
+  /* ── Log section ─────────────────────────────────────────────── */
+  #log-section { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #log-output {
+    flex: 1;
+    overflow-y: auto;
+    font-size: 10px;
+    line-height: 1.55;
+    color: #475569;
+    padding: 8px 16px 16px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    min-height: 120px;
+    max-height: 260px;
+  }
+  #log-output .log-idp    { color: #f97316; }
+  #log-output .log-screen { color: #facc15; }
+  #log-output .log-deny   { color: #ef4444; }
+</style>
+</head>
+<body>
+
+<!-- ── Status bar ──────────────────────────────────────────────────────────── -->
+<div id="statusbar">
+  <div id="ws-dot"></div>
+  <span class="title">vSRX SECURITY DEMO</span>
+  <span class="sep">|</span>
+  <span class="info">Status: <span id="poll-status">connecting</span></span>
+  <span class="sep">|</span>
+  <span class="info">Updated: <span id="last-update">—</span></span>
+  <button id="btn-reset" onclick="resetCounters()">Reset Counters</button>
+</div>
+
+<!-- ── Main content ────────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- Topology SVG -->
+  <div id="topology-area">
+    <svg id="topology" viewBox="0 0 900 420" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+
+    <!-- Screen counters -->
+    <div class="sb-section">
+      <div class="sb-title">Screen Counters</div>
+      <div class="ctr-row">
+        <span class="ctr-label"><span class="ctr-dot" id="dot-port-scan"></span>Port Scan</span>
+        <span style="display:flex;align-items:center;gap:6px">
+          <span class="ctr-delta" id="d-port-scan"></span>
+          <span class="ctr-value" id="v-port-scan">—</span>
+        </span>
+      </div>
+      <div class="ctr-row">
+        <span class="ctr-label"><span class="ctr-dot" id="dot-syn-flood"></span>SYN Flood</span>
+        <span style="display:flex;align-items:center;gap:6px">
+          <span class="ctr-delta" id="d-syn-flood"></span>
+          <span class="ctr-value" id="v-syn-flood">—</span>
+        </span>
+      </div>
+      <div class="ctr-row">
+        <span class="ctr-label"><span class="ctr-dot" id="dot-icmp-flood"></span>ICMP Flood</span>
+        <span style="display:flex;align-items:center;gap:6px">
+          <span class="ctr-delta" id="d-icmp-flood"></span>
+          <span class="ctr-value" id="v-icmp-flood">—</span>
+        </span>
+      </div>
+      <div class="ctr-row">
+        <span class="ctr-label"><span class="ctr-dot" id="dot-ip-spoofing"></span>IP Spoofing</span>
+        <span style="display:flex;align-items:center;gap:6px">
+          <span class="ctr-delta" id="d-ip-spoofing"></span>
+          <span class="ctr-value" id="v-ip-spoofing">—</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- IDP hits -->
+    <div class="sb-section">
+      <div class="sb-title">IDP Hits</div>
+      <div class="ctr-row">
+        <span class="ctr-label"><span class="ctr-dot" id="dot-ssh-brute"></span>SSH Brute Force</span>
+        <span style="display:flex;align-items:center;gap:6px">
+          <span class="ctr-delta" id="d-ssh-brute"></span>
+          <span class="ctr-value" id="v-ssh-brute">—</span>
+        </span>
+      </div>
+      <div class="ctr-row">
+        <span class="ctr-label"><span class="ctr-dot" id="dot-http-atk"></span>HTTP Attacks</span>
+        <span style="display:flex;align-items:center;gap:6px">
+          <span class="ctr-delta" id="d-http-atk"></span>
+          <span class="ctr-value" id="v-http-atk">—</span>
+        </span>
+      </div>
+      <div class="ctr-row">
+        <span class="ctr-label"><span class="ctr-dot" id="dot-sql-inject"></span>SQL Injection</span>
+        <span style="display:flex;align-items:center;gap:6px">
+          <span class="ctr-delta" id="d-sql-inject"></span>
+          <span class="ctr-value" id="v-sql-inject">—</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Mini stats -->
+    <div class="sb-section">
+      <div class="mini-stats">
+        <span class="mini-stat">Sessions&nbsp;<span id="v-sessions">—</span></span>
+        <span class="mini-stat">Policy Hits&nbsp;<span id="v-policy">—</span></span>
+      </div>
+    </div>
+
+    <!-- Node detail (click-through) -->
+    <div class="sb-section" id="detail-section">
+      <div class="detail-header">
+        <h4 id="detail-title">NODE DETAIL</h4>
+        <button id="btn-close-detail" onclick="clearSelection()">✕</button>
+      </div>
+      <div id="detail-content"></div>
+    </div>
+
+    <!-- Security logs -->
+    <div id="log-section">
+      <div class="sb-section" style="border-bottom:none; padding-bottom:4px">
+        <div class="sb-title">Security Logs</div>
+      </div>
+      <pre id="log-output">Connecting to vSRX...</pre>
+    </div>
+
+  </div><!-- /sidebar -->
+</div><!-- /main -->
+
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────
+
+const SVG_W = 900, SVG_H = 420, R = 52;
+
+const NODE_DEFS = [
+  { id: "kali",      x: 150, y: 210, icon: "⚔",  label: "Kali",       sublabel: "10.0.1.20"  },
+  { id: "vsrx",      x: 450, y: 210, icon: "🛡", label: "vSRX",       sublabel: "10.0.0.x"   },
+  { id: "webserver", x: 750, y: 210, icon: "🖥",  label: "Web Server", sublabel: "10.0.2.100" },
+];
+
+const LINK_DEFS = [
+  { id: "kali_to_vsrx", source: "kali",  target: "vsrx",      label: "untrust → SRX" },
+  { id: "vsrx_to_web",  source: "vsrx",  target: "webserver", label: "SRX → trust"   },
+];
+
+const STATUS_COLOR = {
+  healthy: "#22c55e",
+  warning: "#f97316",
+  attack:  "#ef4444",
+  stopped: "#6b7280",
+  unknown: "#475569",
+};
+
+// ── Global state ───────────────────────────────────────────────────────────
+
+let currentState  = null;
+let selectedId    = null;
+let ws            = null;
+let reconnectMs   = 1000;
+
+// ── Topology init (runs once) ──────────────────────────────────────────────
+
+function initTopology() {
+  const svg = d3.select("#topology");
+
+  // Arrow markers for healthy and attack states
+  const defs = svg.append("defs");
+  [["arrow-h", "#475569"], ["arrow-a", "#ef4444"]].forEach(([id, fill]) => {
+    defs.append("marker")
+      .attr("id", id).attr("viewBox", "0 0 10 10")
+      .attr("refX", 9).attr("refY", 5)
+      .attr("markerWidth", 6).attr("markerHeight", 6)
+      .attr("orient", "auto")
+      .append("path").attr("d", "M0,0 L10,5 L0,10 Z").attr("fill", fill);
+  });
+
+  // Zone backgrounds
+  const zones = [
+    { x: 28,  y: 78, w: 244, h: 264, fill: "rgba(220,38,38,0.07)",  stroke: "rgba(220,38,38,0.18)", label: "UNTRUST ZONE", lx: 150 },
+    { x: 628, y: 78, w: 244, h: 264, fill: "rgba(22,163,74,0.07)",  stroke: "rgba(22,163,74,0.18)", label: "TRUST ZONE",   lx: 750 },
+  ];
+  zones.forEach(z => {
+    svg.append("rect")
+      .attr("x", z.x).attr("y", z.y).attr("width", z.w).attr("height", z.h)
+      .attr("rx", 10).attr("fill", z.fill).attr("stroke", z.stroke).attr("stroke-width", 1);
+    svg.append("text")
+      .attr("x", z.lx).attr("y", 66)
+      .attr("text-anchor", "middle").attr("font-size", 10).attr("font-family", "monospace")
+      .attr("fill", z.stroke).attr("letter-spacing", "0.1em")
+      .text(z.label);
+  });
+
+  // Links
+  const byId = Object.fromEntries(NODE_DEFS.map(n => [n.id, n]));
+  LINK_DEFS.forEach(lnk => {
+    const s = byId[lnk.source], t = byId[lnk.target];
+    // All nodes are at the same y, so links are horizontal
+    svg.append("line")
+      .attr("id", `link-${lnk.id}`)
+      .attr("x1", s.x + R + 6).attr("y1", s.y)
+      .attr("x2", t.x - R - 1).attr("y2", t.y)
+      .attr("stroke", "#334155").attr("stroke-width", 2.5)
+      .attr("marker-end", "url(#arrow-h)")
+      .style("cursor", "pointer")
+      .on("click", () => selectNode(lnk.id));
+
+    svg.append("text")
+      .attr("x", (s.x + t.x) / 2).attr("y", s.y - R - 14)
+      .attr("text-anchor", "middle").attr("font-size", 10)
+      .attr("fill", "#334155").attr("font-family", "monospace")
+      .attr("letter-spacing", "0.06em")
+      .text(lnk.label);
+  });
+
+  // Nodes
+  NODE_DEFS.forEach(nd => {
+    const g = svg.append("g")
+      .attr("id", `node-${nd.id}`)
+      .style("cursor", "pointer")
+      .on("click", () => selectNode(nd.id));
+
+    // Selection ring (hidden until selected)
+    g.append("circle")
+      .attr("id", `ring-${nd.id}`)
+      .attr("cx", nd.x).attr("cy", nd.y).attr("r", R + 10)
+      .attr("fill", "none").attr("stroke", "#e2e8f0").attr("stroke-width", 1.5)
+      .attr("stroke-dasharray", "5 3").attr("opacity", 0);
+
+    // Main circle
+    g.append("circle")
+      .attr("id", `circle-${nd.id}`)
+      .attr("cx", nd.x).attr("cy", nd.y).attr("r", R)
+      .attr("fill", "#1e293b")
+      .attr("stroke", STATUS_COLOR.unknown).attr("stroke-width", 3);
+
+    // Icon
+    g.append("text")
+      .attr("x", nd.x).attr("y", nd.y + 11)
+      .attr("text-anchor", "middle").attr("font-size", 32)
+      .text(nd.icon);
+
+    // Label
+    g.append("text")
+      .attr("x", nd.x).attr("y", nd.y + R + 22)
+      .attr("text-anchor", "middle").attr("font-size", 13)
+      .attr("fill", "#cbd5e1").attr("font-family", "monospace").attr("font-weight", "bold")
+      .text(nd.label);
+
+    // Sublabel / IP (updated dynamically)
+    g.append("text")
+      .attr("id", `sublabel-${nd.id}`)
+      .attr("x", nd.x).attr("y", nd.y + R + 38)
+      .attr("text-anchor", "middle").attr("font-size", 11)
+      .attr("fill", "#475569").attr("font-family", "monospace")
+      .text(nd.sublabel);
+
+    // Status badge (small dot at top-right of circle)
+    g.append("circle")
+      .attr("id", `badge-${nd.id}`)
+      .attr("cx", nd.x + R * 0.72).attr("cy", nd.y - R * 0.72).attr("r", 9)
+      .attr("fill", STATUS_COLOR.unknown)
+      .attr("stroke", "#0f172a").attr("stroke-width", 2);
+  });
+}
+
+// ── State application ──────────────────────────────────────────────────────
+
+function applyState(state) {
+  currentState = state;
+  updateNodes(state.nodes);
+  updateLinks(state.links);
+  updateCounters(state);
+  updateStatusBar(state);
+  if (selectedId) updateDetail(selectedId, state);
+}
+
+function updateNodes(nodes) {
+  Object.entries(nodes).forEach(([id, data]) => {
+    const color = STATUS_COLOR[data.status] || STATUS_COLOR.unknown;
+    d3.select(`#circle-${id}`).transition().duration(500).attr("stroke", color);
+    d3.select(`#badge-${id}`).transition().duration(500).attr("fill", color);
+    if (data.public_ip) {
+      d3.select(`#sublabel-${id}`).text(data.public_ip);
+    }
+  });
+}
+
+function updateLinks(links) {
+  Object.entries(links).forEach(([id, data]) => {
+    const isAtk = data.status === "attack";
+    const el = d3.select(`#link-${id}`);
+    el.transition().duration(300)
+      .attr("stroke", isAtk ? "#ef4444" : "#334155")
+      .attr("stroke-width", isAtk ? 4 : 2.5)
+      .attr("marker-end", isAtk ? "url(#arrow-a)" : "url(#arrow-h)");
+    el.classed("link-attack", isAtk);
+  });
+}
+
+function updateCounters(state) {
+  const sc = state.screen_counters || {};
+  const sd = state.screen_deltas   || {};
+  const ic = state.idp_hits        || {};
+  const id = state.idp_deltas      || {};
+
+  setCounter("port-scan",  sc.port_scan,    sd.port_scan);
+  setCounter("syn-flood",  sc.syn_flood,    sd.syn_flood);
+  setCounter("icmp-flood", sc.icmp_flood,   sd.icmp_flood);
+  setCounter("ip-spoofing",sc.ip_spoofing,  sd.ip_spoofing);
+  setCounter("ssh-brute",  ic.ssh_brute,    id.ssh_brute);
+  setCounter("http-atk",   ic.http_attacks, id.http_attacks);
+  setCounter("sql-inject", ic.sql_injection,id.sql_injection);
+
+  setText("v-sessions", state.session_summary?.active_sessions ?? "—");
+  setText("v-policy",   state.policy_hit_count ?? "—");
+}
+
+function setCounter(key, value, delta) {
+  setText(`v-${key}`, (value ?? 0).toLocaleString());
+
+  const dotEl = document.getElementById(`dot-${key}`);
+  if (dotEl) {
+    dotEl.classList.toggle("active",   delta > 0);
+    dotEl.classList.toggle("nonzero",  delta === 0 && value > 0);
+  }
+
+  const deltaEl = document.getElementById(`d-${key}`);
+  if (deltaEl) {
+    if (delta > 0) {
+      deltaEl.textContent = `+${delta}`;
+      deltaEl.style.opacity = "1";
+    } else {
+      deltaEl.textContent = "";
+      deltaEl.style.opacity = "0";
+    }
+  }
+}
+
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+function updateStatusBar(state) {
+  const dot = document.getElementById("ws-dot");
+  const statusEl = document.getElementById("poll-status");
+
+  if (state.poll_status === "ok") {
+    dot.className = "ok";
+    statusEl.textContent = "OK";
+    statusEl.style.color = "#22c55e";
+  } else if (state.poll_status === "ssh_error") {
+    dot.className = "warn";
+    statusEl.textContent = "SSH error";
+    statusEl.style.color = "#f97316";
+  } else {
+    dot.className = "";
+    statusEl.textContent = state.poll_status;
+    statusEl.style.color = "#64748b";
+  }
+
+  document.getElementById("last-update").textContent = new Date().toLocaleTimeString();
+
+  // Color recent logs with highlights
+  const logEl = document.getElementById("log-output");
+  if (state.recent_logs && state.recent_logs.length > 0) {
+    logEl.innerHTML = state.recent_logs.map(line => {
+      const escaped = line.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+      if (/IDP/i.test(line))    return `<span class="log-idp">${escaped}</span>`;
+      if (/SCREEN/i.test(line)) return `<span class="log-screen">${escaped}</span>`;
+      if (/DENY|DROP/i.test(line)) return `<span class="log-deny">${escaped}</span>`;
+      return escaped;
+    }).join("\n");
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+}
+
+// ── Node / link selection ──────────────────────────────────────────────────
+
+function selectNode(id) {
+  if (selectedId === id) {
+    clearSelection();
+    return;
+  }
+  selectedId = id;
+
+  // Clear all selection rings
+  d3.selectAll("[id^='ring-']").attr("opacity", 0).classed("ring-selected", false);
+
+  // Highlight the selected node ring (or just update sidebar for links)
+  const ring = d3.select(`#ring-${id}`);
+  if (!ring.empty()) {
+    ring.attr("opacity", 1).classed("ring-selected", true);
+  }
+
+  document.getElementById("detail-section").style.display = "block";
+  if (currentState) updateDetail(id, currentState);
+}
+
+function clearSelection() {
+  selectedId = null;
+  d3.selectAll("[id^='ring-']").attr("opacity", 0).classed("ring-selected", false);
+  document.getElementById("detail-section").style.display = "none";
+}
+
+function updateDetail(id, state) {
+  document.getElementById("detail-title").textContent = id.replace(/_/g," ").toUpperCase();
+
+  let rows = [];
+
+  // Check if it's a node
+  const nodeData = state.nodes?.[id];
+  if (nodeData) {
+    rows.push(["Status",        statusSpan(nodeData.status)]);
+    rows.push(["Instance",      nodeData.instance_state || "unknown"]);
+    if (nodeData.public_ip) rows.push(["Public IP", nodeData.public_ip]);
+
+    if (id === "vsrx") {
+      rows.push(["ge-0/0/0", nodeData.ge0_up ? '<span class="s-healthy">UP</span>' : '<span class="s-warning">DOWN</span>']);
+      rows.push(["ge-0/0/1", nodeData.ge1_up ? '<span class="s-healthy">UP</span>' : '<span class="s-warning">DOWN</span>']);
+      rows.push(["Active Sessions",  state.session_summary?.active_sessions ?? 0]);
+      rows.push(["Policy Hits",      state.policy_hit_count ?? 0]);
+    }
+    if (id === "webserver") {
+      const reachable = nodeData.web_reachable;
+      rows.push(["Ping from vSRX", reachable
+        ? '<span class="s-healthy">REACHABLE</span>'
+        : '<span class="s-warning">UNREACHABLE</span>']);
+    }
+  }
+
+  // Check if it's a link
+  const linkData = state.links?.[id];
+  if (linkData) {
+    rows.push(["Status", statusSpan(linkData.status)]);
+    const sd = state.screen_deltas || {};
+    const id2 = state.idp_deltas   || {};
+    if (id === "kali_to_vsrx") {
+      rows.push(["Port Scan Δ",   sd.port_scan   || 0]);
+      rows.push(["SYN Flood Δ",   sd.syn_flood   || 0]);
+      rows.push(["ICMP Flood Δ",  sd.icmp_flood  || 0]);
+      rows.push(["IP Spoof Δ",    sd.ip_spoofing || 0]);
+    }
+    if (id === "vsrx_to_web") {
+      rows.push(["SSH Brute Δ",   id2.ssh_brute    || 0]);
+      rows.push(["HTTP Attacks Δ",id2.http_attacks || 0]);
+      rows.push(["SQL Inject Δ",  id2.sql_injection|| 0]);
+    }
+  }
+
+  document.getElementById("detail-content").innerHTML = rows.map(
+    ([label, val]) => `<div class="detail-row"><span>${label}</span><span class="val">${val}</span></div>`
+  ).join("");
+}
+
+function statusSpan(status) {
+  return `<span class="s-${status}">${(status || "unknown").toUpperCase()}</span>`;
+}
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+
+function connectWS() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    reconnectMs = 1000;
+    document.getElementById("ws-dot").className = "ok";
+  };
+
+  ws.onmessage = evt => {
+    try { applyState(JSON.parse(evt.data)); } catch (e) {}
+  };
+
+  ws.onclose = () => {
+    document.getElementById("ws-dot").className = "error";
+    setTimeout(connectWS, reconnectMs);
+    reconnectMs = Math.min(reconnectMs * 2, 30000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+// ── Reset counters ─────────────────────────────────────────────────────────
+
+async function resetCounters() {
+  const btn = document.getElementById("btn-reset");
+  btn.disabled = true;
+  btn.textContent = "Resetting…";
+  try {
+    const r = await fetch("/api/reset-counters", { method: "POST" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+  } catch (e) {
+    alert("Reset failed: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Reset Counters";
+  }
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────
+
+document.addEventListener("DOMContentLoaded", () => {
+  initTopology();
+  connectWS();
+});
+</script>
+</body>
+</html>

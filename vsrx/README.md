@@ -5,7 +5,7 @@
 After `terraform apply`, the vSRX takes **3–5 minutes** to boot. Check readiness:
 
 ```bash
-ssh -i ~/.ssh/<your-key>.pem root@<vsrx-mgmt-eip> "show version"
+ssh -i ~/.ssh/<your-key>.pem ec2-user@<vsrx-mgmt-eip> "show version"
 ```
 
 Retry every 30 seconds until it responds. The management IP is in `terraform output vsrx_mgmt_public_ip`.
@@ -17,7 +17,7 @@ Retry every 30 seconds until it responds. The management IP is in `terraform out
 SSH in and start the download before doing anything else:
 
 ```
-ssh -i ~/.ssh/<your-key>.pem root@<vsrx-mgmt-eip>
+ssh -i ~/.ssh/<your-key>.pem ec2-user@<vsrx-mgmt-eip>
 cli
 request security idp security-package download
 ```
