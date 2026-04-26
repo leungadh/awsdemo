@@ -63,11 +63,31 @@ resource "aws_route" "untrust_default" {
   gateway_id             = aws_internet_gateway.igw.id
 }
 
-# Trust: default to vSRX trust ENI (all web server egress goes through SRX)
-#        The default route is added in instances.tf after the ENI is created.
+# Trust: internet via NAT GW (web server package installs),
+#        RFC1918 via vSRX trust ENI (attack return traffic stays inspected).
+#        The 10.0.0.0/8 route is added in instances.tf after the ENI is created.
 resource "aws_route_table" "trust" {
   vpc_id = aws_vpc.demo.id
   tags   = { Name = "vsrx-demo-trust-rt" }
+}
+
+# NAT Gateway for web server outbound internet (apt-get, DVWA installs)
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags   = { Name = "vsrx-demo-nat-eip" }
+}
+
+resource "aws_nat_gateway" "nat" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.mgmt.id
+  tags          = { Name = "vsrx-demo-nat-gw" }
+  depends_on    = [aws_internet_gateway.igw]
+}
+
+resource "aws_route" "trust_internet" {
+  route_table_id         = aws_route_table.trust.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.nat.id
 }
 
 # ── Route Table Associations ──────────────────────────────────────────────────

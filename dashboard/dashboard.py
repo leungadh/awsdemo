@@ -41,10 +41,10 @@ from aiohttp import web
 # ── Junos CLI output parsers ──────────────────────────────────────────────────
 
 RE_SCREEN = {
-    "port_scan":   re.compile(r"TCP port scan:\s+(\d+)", re.I),
-    "syn_flood":   re.compile(r"TCP SYN flood:\s+(\d+)", re.I),
-    "icmp_flood":  re.compile(r"ICMP flood:\s+(\d+)", re.I),
-    "ip_spoofing": re.compile(r"IP spoofing:\s+(\d+)", re.I),
+    "port_scan":   re.compile(r"TCP port scan\s+(\d+)", re.I),
+    "syn_flood":   re.compile(r"TCP SYN flood\s+(\d+)", re.I),
+    "icmp_flood":  re.compile(r"ICMP flood\s+(\d+)", re.I),
+    "ip_spoofing": re.compile(r"IP spoofing\s+(\d+)", re.I),
 }
 
 # Count lines in `show security idp attack table` matching each attack group
@@ -52,9 +52,9 @@ RE_IDP_SSH  = re.compile(r"\bSSH\b", re.I)
 RE_IDP_HTTP = re.compile(r"\bHTTP\b", re.I)
 RE_IDP_SQL  = re.compile(r"\bSQL\b", re.I)
 
-RE_SESSION  = re.compile(r"Total sessions:\s+(\d+)", re.I)
-# demo-policy hit-count line: "  4   untrust   trust   demo-policy   0   <HITS>"
-RE_POLICY   = re.compile(r"demo-policy\s+\d+\s+(\d+)", re.I)
+RE_SESSION  = re.compile(r"Sessions-in-use:\s+(\d+)", re.I)
+# demo-policy hit-count line: "  3   untrust   trust   demo-policy   222   Permit"
+RE_POLICY   = re.compile(r"demo-policy\s+(\d+)", re.I)
 # Physical interface terse: "ge-0/0/0   up   up"  (stops matching on "ge-0/0/0.0" due to ".")
 RE_IFACE    = re.compile(r"^(ge-0/0/\d+)\s+(up|down)\s+(up|down)", re.I | re.M)
 
@@ -225,8 +225,15 @@ class SSHPoller:
         except Exception:
             return ""
 
+    async def _clear(self, cmd: str, timeout: int = 10) -> None:
+        """Run a clear/operational command that produces no pager output."""
+        try:
+            await asyncio.wait_for(self._conn.run(cmd), timeout=timeout)
+        except Exception:
+            pass
+
     async def _ensure_connected(self):
-        if self._conn is None or self._conn.is_closing():
+        if self._conn is None or self._conn.is_closed():
             await self._connect()
 
     async def poll(self) -> dict | None:
@@ -266,8 +273,8 @@ class SSHPoller:
         for attempt in range(2):
             try:
                 await self._ensure_connected()
-                await self._run("clear security screen statistics")
-                await self._run("clear security idp counters")
+                await self._clear("clear security screen statistics interface ge-0/0/0")
+                await self._clear("clear security idp counters")
                 return
             except (asyncssh.Error, OSError):
                 self._conn = None

@@ -122,6 +122,14 @@ resource "aws_security_group" "webserver" {
   vpc_id      = aws_vpc.demo.id
 
   ingress {
+    description = "ICMP from VPC (ping for connectivity testing)"
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  ingress {
     description = "HTTP from VPC (Kali traffic passes through vSRX routing)"
     from_port   = 80
     to_port     = 80
@@ -143,6 +151,14 @@ resource "aws_security_group" "webserver" {
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = [var.admin_cidr]
+  }
+
+  ingress {
+    description = "SSH from VPC (jump via Kali for troubleshooting)"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
   }
 
   egress {

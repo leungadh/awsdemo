@@ -35,6 +35,13 @@ resource "aws_eip" "srx_mgmt" {
   tags                      = { Name = "vsrx-demo-srx-mgmt-eip" }
 }
 
+resource "aws_eip" "srx_untrust" {
+  domain                    = "vpc"
+  network_interface         = aws_network_interface.srx_untrust.id
+  associate_with_private_ip = "10.0.1.254"
+  tags                      = { Name = "vsrx-demo-srx-untrust-eip" }
+}
+
 # ── vSRX Instance ─────────────────────────────────────────────────────────────
 # c5.2xlarge: minimum instance type for vSRX (8 vCPU, 16 GB RAM).
 # ENI device_index order maps to Junos interfaces:
@@ -74,9 +81,9 @@ resource "aws_route" "untrust_to_trust" {
   depends_on             = [aws_instance.vsrx]
 }
 
-resource "aws_route" "trust_default" {
+resource "aws_route" "trust_rfc1918" {
   route_table_id         = aws_route_table.trust.id
-  destination_cidr_block = "0.0.0.0/0"
+  destination_cidr_block = "10.0.0.0/8"
   network_interface_id   = aws_network_interface.srx_trust.id
   depends_on             = [aws_instance.vsrx]
 }

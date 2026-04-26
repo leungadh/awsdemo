@@ -5,8 +5,10 @@
 # BEFORE applying defense:
 #   Spoofed packets and malformed TCP reach the web server
 #
-# AFTER defense (Screen: ip spoofing, tcp land, tcp syn-fin, tcp no-flag):
+# AFTER defense (Screen: ip spoofing, tcp land, tcp syn-fin):
 #   SRX drops all anomalous packets at the untrust interface
+#   NOTE: tcp no-flag (null scan) is not supported on Junos 24.4 vSRX — Attack 4
+#         will pass through; all others are blocked.
 #
 # Verify on vSRX:
 #   show security screen statistics interface ge-0/0/0
@@ -36,6 +38,7 @@ sudo hping3 -S -F -p 80 -c 5 "$TARGET"
 echo ""
 
 echo "[*] Attack 4 — TCP packet with NO flags set (null scan)..."
+echo "    NOTE: tcp no-flag screen not supported on Junos 24.4 vSRX — packets will pass."
 sudo hping3 -p 80 -c 5 "$TARGET"
 echo ""
 

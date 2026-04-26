@@ -19,6 +19,22 @@
 #   show security idp counters packet
 #   show log security-log | match "SQL\|HTTP" | last 30
 
+echo "========================================"
+echo "Scenario 5: Web Application Attacks (IDP required)"
+echo "========================================"
+echo ""
+echo "  This scenario requires the IDP-SIG license on the vSRX."
+echo "  Without it, nikto and sqlmap traffic will pass uninspected."
+echo ""
+echo "  To enable:"
+echo "    1. Obtain an IDP-SIG license from Juniper (free eval at support.juniper.net)"
+echo "    2. On vSRX: request system license add terminal"
+echo "    3. On vSRX: request security idp security-package install"
+echo "    4. Apply vsrx/baseline-phase2.conf"
+echo ""
+echo "  Skipping — run demo scenarios 01, 02, 03, 06 instead."
+exit 0
+
 TARGET="10.0.2.100"
 DVWA_URL="http://$TARGET/dvwa"
 

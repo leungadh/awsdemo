@@ -18,6 +18,22 @@
 #   show security idp counters
 #   show log security-log | match "SSH" | last 20
 
+echo "========================================"
+echo "Scenario 4: SSH Brute Force (IDP required)"
+echo "========================================"
+echo ""
+echo "  This scenario requires the IDP-SIG license on the vSRX."
+echo "  Without it, Hydra traffic will pass uninspected."
+echo ""
+echo "  To enable:"
+echo "    1. Obtain an IDP-SIG license from Juniper (free eval at support.juniper.net)"
+echo "    2. On vSRX: request system license add terminal"
+echo "    3. On vSRX: request security idp security-package install"
+echo "    4. Apply vsrx/baseline-phase2.conf"
+echo ""
+echo "  Skipping — run demo scenarios 01, 02, 03, 06 instead."
+exit 0
+
 TARGET="10.0.2.100"
 
 echo "========================================"
